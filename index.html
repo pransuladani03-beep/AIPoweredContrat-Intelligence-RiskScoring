@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>Contract Intelligence Risk Dashboard</title>
+    <style>
+        body { font-family: system-ui, sans-serif; margin: 40px; max-width: 800px; background: #f8fafc; }
+        .card { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-bottom: 20px; }
+        button { background: #0284c7; color: white; border: none; padding: 10px 15px; border-radius: 4px; cursor: pointer; }
+        .alert { background: #fee2e2; color: #991b1b; padding: 10px; border-radius: 4px; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <h1>⚖️ AI Contract Risk Reviewer</h1>
+    
+    <div class="card">
+        <h3>1. Upload Legal Document (PDF)</h3>
+        <input type="file" id="pdfInput" accept=".pdf">
+        <button onclick="uploadDocument()">Analyze Document</button>
+        <p id="uploadStatus"></p>
+    </div>
+
+    <div class="card" id="resultsCard" style="display:none;">
+        <h3>2. Compliance & Due Diligence Report</h3>
+        <p><strong>Tracking Job ID:</strong> <span id="jobIdDisplay"></span></p>
+        <p><strong>AI Status:</strong> <span id="statusDisplay"></span></p>
+        <div id="riskContainer"></div>
+    </div>
+
+    <script>
+        let currentJobId = null;
+
+        async function uploadDocument() {
+            const fileInput = document.getElementById('pdfInput');
+            if (!fileInput.files[0]) return alert("Select a PDF first!");
+
+            const formData = new FormData();
+            formData.append("file", fileInput.files[0]);
+
+            document.getElementById('uploadStatus').innerText = "Uploading to FastAPI...";
+            
+            const response = await fetch("http://localhost:8000/api/v1/analyze-contract/", { method: "POST", body: formData });
+            const data = await response.json();
+            
+            currentJobId = data.job_id;
+            document.getElementById('uploadStatus').innerText = "Uploaded! AI Background task triggered.";
+            document.getElementById('resultsCard').style.display = "block";
+            document.getElementById('jobIdDisplay').innerText = currentJobId;
+            
+            pollStatus();
+        }
+
+        async function pollStatus() {
+            const res = await fetch(`http://localhost:8000/api/v1/job-status/${currentJobId}`);
+            const data = await res.json();
+
+            if (typeof data.result === "string") {
+                document.getElementById('statusDisplay').innerText = data.result;
+                setTimeout(pollStatus, 2000); // Check again in 2 seconds
+            } else {
+                document.getElementById('statusDisplay').innerText = "✅ Analysis Complete!";
+                const riskDiv = document.getElementById('riskContainer');
+                riskDiv.innerHTML = `<div class="alert">⚠️ ${data.result.high_risk_flags[0]}</div>
+                                     <p><strong>Analyzed via:</strong> ${data.result.total_chunks_analyzed} sliding window chunks</p>`;
+            }
+        }
+    </script>
+</body>
+</html>
